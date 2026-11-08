@@ -85,6 +85,32 @@ class OrderSafetyNetTests(unittest.TestCase):
         ):
             self.assertEqual(quoted[key], placed[key])
 
+    def test_cancel_order_is_idempotent(self):
+        order = self.service.place_order("regular", [{"product_id": "hoodie", "quantity": 1}])
+        self.assertEqual({p["product_id"]: p["stock"] for p in self.service.catalog()}["hoodie"], 4)
+
+        self.service.cancel_order(order["order_id"])
+        self.assertEqual({p["product_id"]: p["stock"] for p in self.service.catalog()}["hoodie"], 5)
+
+        self.service.cancel_order(order["order_id"])
+        self.assertEqual({p["product_id"]: p["stock"] for p in self.service.catalog()}["hoodie"], 5)
+
+    def test_cr01_express_delivery_fee_applied_and_not_waived_over_threshold(self):
+        items = [{"product_id": "hoodie", "quantity": 3}]
+        
+        quote_res = self.service.quote("regular", items, "express")
+        self.assertEqual(quote_res["delivery_cents"], 1200)
+        self.assertEqual(quote_res["total_cents"], 12000 + 1200)
+
+    def test_cr01_express_student_discount_applies_only_to_merchandise(self):
+        items = [{"product_id": "hoodie", "quantity": 2}]
+        
+        order = self.service.place_order("student", items, "express")
+        self.assertEqual(order["subtotal_cents"], 8000)
+        self.assertEqual(order["discount_cents"], 800)
+        self.assertEqual(order["delivery_cents"], 1200)
+        self.assertEqual(order["total_cents"], 8400)
+
 
 if __name__ == "__main__":
     unittest.main()
